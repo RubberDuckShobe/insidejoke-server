@@ -1,0 +1,18 @@
+[package]
+name = "insidejoke-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+dasp_sample = "0.11.0"
+futures-util = "0.3.31"
+once_cell = "1.20.2"
+ringbuffer = "0.15.0"
+samplerate = "0.2.4"
+tokio = { version = "1.43.0", features = ["full"] }
+tokio-stream = { version = "0.1.17", features = ["net"] }
+tokio-tungstenite = "0.26.1"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+whisper-rs = { version = "0.13.2", features = ["whisper-cpp-tracing"] }
