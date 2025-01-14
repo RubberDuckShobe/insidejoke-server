@@ -9,13 +9,11 @@ use once_cell::sync::Lazy;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 use samplerate::{convert, ConverterType};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::{fs, io::AsyncWriteExt};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{
     accept_async,
     tungstenite::{Error, Result},
 };
-use whisper_rs::{WhisperContext, WhisperContextParameters};
 
 static SPEECH_BUF: Lazy<Mutex<AllocRingBuffer<f32>>> =
     Lazy::new(|| Mutex::new(AllocRingBuffer::new(16000 * 30))); // 30s
@@ -55,11 +53,6 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
     while let Some(msg) = ws_stream.next().await {
         let msg = msg?;
         if msg.is_binary() {
-            let mut file = fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("saus.wav")
-                .await?;
             tracing::info!("{} bytes incoming", msg.len());
             let data = msg.into_data();
 
