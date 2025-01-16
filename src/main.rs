@@ -52,42 +52,48 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
 
     tracing::info!("New WebSocket connection: {}", peer);
 
-    let mut time = Instant::now();
     loop {
+        let time = Instant::now();
         tokio::select! {
-             _ = sleep(Duration::from_millis(1500)) => {
+            _ = sleep(Duration::from_millis(1500)) => {
                 tracing::info!("timed out, starting transcription in background");
                 transcribe_in_background();
-              },
-             msg = ws_stream.next() => { if let Some(v) = msg {
-                let msg = v?;
-                if msg.is_binary() {
-                    tracing::info!("{} bytes incoming", msg.len());
-                    let data = msg.into_data();
+            },
+            msg = ws_stream.next() => {
+                if let Some(msg) = msg {
+                    let silence_dur = Instant::now() - time;
+                    let msg = msg?;
+                    if msg.is_binary() {
+                        tracing::info!("{} bytes incoming", msg.len());
+                        let data = msg.into_data();
 
-                    let data: Vec<i16> = data
-                        .chunks_exact(2)
-                        .into_iter()
-                        .map(|a| i16::from_ne_bytes([a[0], a[1]]))
-                        .collect();
+                        //inserted silence???!?!?! no way
+                        let silence_buffer: Vec<f32> = vec![0.0; (16 * silence_dur.as_millis()).try_into().unwrap()];
+                        SPEECH_BUF.lock().unwrap().extend(silence_buffer);
 
-                    let samples: Vec<f32> = data
-                        .iter()
-                        .map(|s| s.to_float_sample().to_sample())
-                        .collect();
-                    let samples = convert(48000, 16000, 1, ConverterType::SincBestQuality, &samples)
-                        .expect("sample conversion failed???");
+                        let data: Vec<i16> = data
+                           .chunks_exact(2)
+                           .into_iter()
+                           .map(|a| i16::from_ne_bytes([a[0], a[1]]))
+                           .collect();
 
-                    SPEECH_BUF.lock().unwrap().extend(samples.clone());
+                        let samples: Vec<f32> = data
+                            .iter()
+                            .map(|s| s.to_float_sample().to_sample())
+                            .collect();
+                        let samples = convert(48000, 16000, 1, ConverterType::SincBestQuality, &samples)
+                            .expect("sample conversion failed???");
 
-                    ws_stream.send(Message::text("ok")).await?;
+                        SPEECH_BUF.lock().unwrap().extend(samples.clone());
+
+                        ws_stream.send(Message::text("ok")).await?;
+                    } else {
+                        tracing::warn!("Received text message instead of binary...?");
+                    }
                 } else {
-                    tracing::warn!("Received text message instead of binary...?");
+                  break Ok(());
                 }
-            } else {
-                break Ok(());
             }
-           }
         }
     }
 }
