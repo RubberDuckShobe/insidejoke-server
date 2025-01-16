@@ -9,6 +9,8 @@ use once_cell::sync::Lazy;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 use samplerate::{convert, ConverterType};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::Duration;
+use tokio::time::{sleep, Instant};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{
     accept_async,
@@ -50,33 +52,44 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
 
     tracing::info!("New WebSocket connection: {}", peer);
 
-    while let Some(msg) = ws_stream.next().await {
-        let msg = msg?;
-        if msg.is_binary() {
-            tracing::info!("{} bytes incoming", msg.len());
-            let data = msg.into_data();
+    let mut time = Instant::now();
+    loop {
+        tokio::select! {
+             _ = sleep(Duration::from_millis(1500)) => {
+                tracing::info!("timed out, starting transcription in background");
+                transcribe_in_background();
+              },
+             msg = ws_stream.next() => { if let Some(v) = msg {
+                let msg = v?;
+                if msg.is_binary() {
+                    tracing::info!("{} bytes incoming", msg.len());
+                    let data = msg.into_data();
 
-            let data: Vec<i16> = data
-                .chunks_exact(2)
-                .into_iter()
-                .map(|a| i16::from_ne_bytes([a[0], a[1]]))
-                .collect();
+                    let data: Vec<i16> = data
+                        .chunks_exact(2)
+                        .into_iter()
+                        .map(|a| i16::from_ne_bytes([a[0], a[1]]))
+                        .collect();
 
-            let samples: Vec<f32> = data
-                .iter()
-                .map(|s| s.to_float_sample().to_sample())
-                .collect();
-            let samples = convert(48000, 16000, 1, ConverterType::SincBestQuality, &samples).expect("sample conversion failed???");
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|s| s.to_float_sample().to_sample())
+                        .collect();
+                    let samples = convert(48000, 16000, 1, ConverterType::SincBestQuality, &samples)
+                        .expect("sample conversion failed???");
 
-            SPEECH_BUF.lock().unwrap().extend(samples.clone());
+                    SPEECH_BUF.lock().unwrap().extend(samples.clone());
 
-            ws_stream.send(Message::text("ok")).await?;
-        } else {
-            tracing::warn!("Received text message instead of binary...?");
+                    ws_stream.send(Message::text("ok")).await?;
+                } else {
+                    tracing::warn!("Received text message instead of binary...?");
+                }
+            } else {
+                break Ok(());
+            }
+           }
         }
     }
-
-    Ok(())
 }
 
 #[tokio::main]
