@@ -86,10 +86,8 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
                             .expect("sample conversion failed???");
 
                         SPEECH_BUF.lock().unwrap().extend(samples.clone());
-
-                        ws_stream.send(Message::text("ok")).await?;
                     } else {
-                        tracing::warn!("Received text message instead of binary...? \"{}\"", msg.into_text()?);
+                        ws_stream.send(Message::text("")).await?;
                     }
                 } else {
                   //break Ok(());

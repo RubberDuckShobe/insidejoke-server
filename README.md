@@ -3,7 +3,7 @@
 Bad code that does horrible, absolutely no good things.
 
 ## How does it work?
-client mod -> server application -> Whisper (locally running. please don't send others' voice data to external services.) -> text
+client mod -> server application -> Whisper (running locally) -> text
 
 > [!WARNING]  
 > Whisper tends to hallucinate and add sentences on short audio since it's made to operate on 30 second long chunks of audio.
