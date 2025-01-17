@@ -15,4 +15,4 @@ tokio-stream = { version = "0.1.17", features = ["net"] }
 tokio-tungstenite = "0.26.1"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
-whisper-rs = { version = "0.13.2", features = ["whisper-cpp-tracing"] }
+whisper-rs = { version = "0.13.2", features = ["whisper-cpp-tracing", "cuda"] }

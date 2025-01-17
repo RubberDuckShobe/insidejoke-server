@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use dasp_sample::Sample;
 use futures_util::{SinkExt, StreamExt};
 use once_cell::sync::Lazy;
-use ringbuffer::{AllocRingBuffer, RingBuffer};
+use ringbuffer::{GrowableAllocRingBuffer, RingBuffer};
 use samplerate::{convert, ConverterType};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::Duration;
@@ -17,8 +17,8 @@ use tokio_tungstenite::{
     tungstenite::{Error, Result},
 };
 
-static SPEECH_BUF: Lazy<Mutex<AllocRingBuffer<f32>>> =
-    Lazy::new(|| Mutex::new(AllocRingBuffer::new(16000 * 30))); // 30s
+static SPEECH_BUF: Lazy<Mutex<GrowableAllocRingBuffer<f32>>> =
+    Lazy::new(|| Mutex::new(GrowableAllocRingBuffer::with_capacity(16000 * 30))); // 30s
 
 fn transcribe_in_background() {
     std::thread::spawn(|| {
@@ -27,10 +27,11 @@ fn transcribe_in_background() {
 
         let min_samples = (1.0 * 16_000.0) as usize;
         if samples.len() < min_samples {
-            tracing::info!("Less than 1s. Skipping...");
+            tracing::debug!("Less than 1s. Skipping...");
             return;
         }
 
+        tracing::info!("Starting transcription");
         if let Some(text) = whisper::transcribe(&samples) {
             tracing::info!("text: {}", text);
         }
@@ -56,7 +57,7 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
         let time = Instant::now();
         tokio::select! {
             _ = sleep(Duration::from_millis(1500)) => {
-                tracing::info!("timed out, starting transcription in background");
+                tracing::debug!("timed out, starting transcription in background");
                 transcribe_in_background();
             },
             msg = ws_stream.next() => {
@@ -64,12 +65,12 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
                     let silence_dur = Instant::now() - time;
                     let msg = msg?;
                     if msg.is_binary() {
-                        tracing::info!("{} bytes incoming", msg.len());
+                        tracing::debug!("{} bytes incoming", msg.len());
                         let data = msg.into_data();
 
                         //inserted silence???!?!?! no way
                         let silence_buffer: Vec<f32> = vec![0.0; (16 * silence_dur.as_millis()).try_into().unwrap()];
-                        SPEECH_BUF.lock().unwrap().extend(silence_buffer);
+                        SPEECH_BUF.lock().unwrap().extend(silence_buffer.clone());
 
                         let data: Vec<i16> = data
                            .chunks_exact(2)
@@ -88,10 +89,10 @@ async fn handle_connection(peer: SocketAddr, stream: TcpStream) -> Result<()> {
 
                         ws_stream.send(Message::text("ok")).await?;
                     } else {
-                        tracing::warn!("Received text message instead of binary...?");
+                        tracing::warn!("Received text message instead of binary...? \"{}\"", msg.into_text()?);
                     }
                 } else {
-                  break Ok(());
+                  //break Ok(());
                 }
             }
         }

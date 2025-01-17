@@ -21,18 +21,13 @@ pub fn init(model_path: &str) {
     params.set_print_realtime(false);
     params.set_print_special(false);
     params.set_print_timestamps(false);
-    params.set_language(Some("en"));
+    params.set_language(Some("auto"));
 
     *WHISPER_STATE.lock().unwrap() = Some(state);
     *WHISPER_PARAMS.lock().unwrap() = Some(params);
 }
 
 pub fn transcribe(samples: &[f32]) -> Option<String> {
-    let min_samples = (1.0 * 16_000.0) as usize;
-    if samples.len() < min_samples {
-        println!("Less than 1s. Skipping...");
-        return None;
-    }
     let state = WHISPER_STATE.clone();
     let mut state = state.lock().unwrap();
     let state = state.as_mut().unwrap();
@@ -43,9 +38,45 @@ pub fn transcribe(samples: &[f32]) -> Option<String> {
     params.set_print_realtime(false);
     params.set_print_special(false);
     params.set_print_timestamps(false);
-    params.set_language(Some("en"));
+    params.set_language(Some("auto"));
 
     state.full(params, samples).unwrap();
-    let text = state.full_get_segment_text_lossy(0).unwrap();
-    Some(text)
+    // Iterate through the segments of the transcript.
+    let num_segments = state
+        .full_n_segments()
+        .expect("failed to get number of segments");
+    let full_text = (0..num_segments)
+        .map(|i| {
+            // Get the transcribed text and timestamps for the current segment.
+            let segment = state
+                .full_get_segment_text(i)
+                .expect("failed to get segment");
+            let start_timestamp = state
+                .full_get_segment_t0(i)
+                .expect("failed to get start timestamp");
+            let end_timestamp = state
+                .full_get_segment_t1(i)
+                .expect("failed to get end timestamp");
+
+            let first_token_dtw_ts = if let Ok(token_count) = state.full_n_tokens(i) {
+                if token_count > 0 {
+                    if let Ok(token_data) = state.full_get_token_data(i, 0) {
+                        token_data.t_dtw
+                    } else {
+                        -1i64
+                    }
+                } else {
+                    -1i64
+                }
+            } else {
+                -1i64
+            };
+            // Print the segment to stdout.
+            format!(
+                "[{} - {} ({})]: {}",
+                start_timestamp, end_timestamp, first_token_dtw_ts, segment
+            )
+        })
+        .collect();
+    Some(full_text)
 }
