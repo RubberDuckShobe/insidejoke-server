@@ -27,12 +27,12 @@ fn transcribe_in_background() {
 
         let min_samples = (1.0 * 16_000.0) as usize;
         if samples.len() < min_samples {
-            println!("Less than 1s. Skipping...");
+            tracing::info!("Less than 1s. Skipping...");
             return;
         }
 
         if let Some(text) = whisper::transcribe(&samples) {
-            println!("text: {}", text);
+            tracing::info!("text: {}", text);
         }
         speech_buf.clear();
     });
@@ -110,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
         // Traces emitted by the example code will always be displayed. You
         // can set `RUST_LOG=tokio=trace` to enable additional traces emitted by
         // Tokio itself.
-        .with_env_filter(EnvFilter::from_default_env().add_directive("debug".parse()?))
+        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
         // Log events when `tracing` spans are created, entered, exited, or
         // closed. When Tokio's internal tracing support is enabled (as
         // described above), this can be used to track the lifecycle of spawned

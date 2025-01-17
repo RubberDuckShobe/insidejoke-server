@@ -10,11 +10,11 @@ static WHISPER_STATE: Lazy<Arc<Mutex<Option<WhisperState>>>> =
 static WHISPER_PARAMS: Lazy<Mutex<Option<FullParams>>> = Lazy::new(|| Mutex::new(None));
 
 pub fn init(model_path: &str) {
+    whisper_rs::install_whisper_tracing_trampoline();
     // Whisper
     let ctx =
         WhisperContext::new_with_params(model_path, WhisperContextParameters::default()).unwrap();
     let state = ctx.create_state().expect("failed to create key");
-    whisper_rs::install_whisper_tracing_trampoline();
     let mut params = FullParams::new(SamplingStrategy::default());
 
     params.set_print_progress(false);
